@@ -1,0 +1,57 @@
+# ─── GET /track-configs ─────────────────────────────────────
+trackConfigs:
+  get:
+    tags: [Reference]
+    operationId: listTrackConfigs
+    summary: Список конфигураций трасс (read-only)
+    description: |
+      Справочник конфигураций трасс. Используется для фильтрации слотов
+      и отображения в карточке слота. Read-only из существующего бэкенда.
+    security:
+      - BearerAuth: []
+    responses:
+      "200":
+        description: Список конфигураций
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items:
+                    $ref: "../components/schemas.yaml#/TrackConfig"
+      "401":
+        $ref: "../components/responses.yaml#/Unauthorized"
+      "500":
+        $ref: "../components/responses.yaml#/InternalServerError"
+
+# ─── GET /marshals ──────────────────────────────────────────
+marshals:
+  get:
+    tags: [Reference]
+    operationId: listMarshals
+    summary: Список маршалов (read-only)
+    description: |
+      Справочник маршалов-инструкторов. Используется для фильтрации слотов.
+      Если список пуст, фильтр по маршалу в UI скрывается (FR-38).
+    security:
+      - BearerAuth: []
+    responses:
+      "200":
+        description: Список маршалов
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items:
+                    $ref: "../components/schemas.yaml#/Marshal"
+      "401":
+        $ref: "../components/responses.yaml#/Unauthorized"
+      "500":
+        $ref: "../components/responses.yaml#/InternalServerError"

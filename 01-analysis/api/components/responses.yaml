@@ -1,0 +1,65 @@
+# ═══════════════════════════════════════════════════════════
+# Стандартные ответы
+# ═══════════════════════════════════════════════════════════
+
+Unauthorized:
+  description: |
+    Неавторизован. Access-токен истёк или невалиден.
+    Клиент выполняет 401-flow (NFR-18): пытается обновить access по refresh;
+    при неуспехе — очищает токены и переводит на экран авторизации.
+  content:
+    application/json:
+      schema:
+        $ref: "./schemas.yaml#/ErrorResponse"
+      example:
+        error: "unauthorized"
+        message: "Сессия истекла. Войдите заново"
+
+Forbidden:
+  description: Нет прав доступа к ресурсу
+  content:
+    application/json:
+      schema:
+        $ref: "./schemas.yaml#/ErrorResponse"
+      example:
+        error: "forbidden"
+        message: "Нет доступа к этому ресурсу"
+
+NotFound:
+  description: Ресурс не найден
+  content:
+    application/json:
+      schema:
+        $ref: "./schemas.yaml#/ErrorResponse"
+      example:
+        error: "not_found"
+        message: "Ресурс не найден"
+
+InternalServerError:
+  description: |
+    Внутренняя ошибка сервера. Клиент показывает единый Error/Retry (NFR-24).
+    Для мутирующих операций — повтор с тем же Idempotency-Key.
+  content:
+    application/json:
+      schema:
+        $ref: "./schemas.yaml#/ErrorResponse"
+      example:
+        error: "internal_error"
+        message: "Что-то пошло не так. Попробуйте позже"
+
+TooManyRequests:
+  description: Превышен лимит запросов (NFR-19)
+  headers:
+    Retry-After:
+      schema:
+        type: integer
+      description: Секунд до повторной попытки
+  content:
+    application/json:
+      schema:
+        $ref: "./schemas.yaml#/ErrorResponse"
+      example:
+        error: "rate_limited"
+        message: "Слишком много попыток. Подождите и попробуйте снова"
+        details:
+          retry_after: 60

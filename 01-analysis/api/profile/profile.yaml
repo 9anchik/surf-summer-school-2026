@@ -1,0 +1,104 @@
+# ─── GET /profile ───────────────────────────────────────────
+profile:
+  get:
+    tags: [Profile]
+    operationId: getProfile
+    summary: Получить профиль клиента
+    security:
+      - BearerAuth: []
+    responses:
+      "200":
+        description: Данные профиля
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas.yaml#/Client"
+      "401":
+        $ref: "../components/responses.yaml#/Unauthorized"
+      "500":
+        $ref: "../components/responses.yaml#/InternalServerError"
+
+  # ─── PATCH /profile ───────────────────────────────────
+  patch:
+    tags: [Profile]
+    operationId: updateProfile
+    summary: Обновить профиль клиента
+    description: |
+      Обновление имени и/или телефона. При смене телефона требуется
+      повторная SMS-верификация (отдельный поток через OTP).
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              name:
+                type: string
+                minLength: 1
+                maxLength: 50
+                example: "Алексей"
+              phone:
+                type: string
+                pattern: '^\+7\d{10}$'
+                description: |
+                  При смене телефона сервер инициирует новый OTP-поток.
+                  Текущий токен остаётся валидным до подтверждения нового номера.
+    responses:
+      "200":
+        description: Профиль обновлён
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas.yaml#/Client"
+      "400":
+        description: Ошибка валидации
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas.yaml#/ErrorResponse"
+      "401":
+        $ref: "../components/responses.yaml#/Unauthorized"
+      "409":
+        description: Номер телефона уже занят
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas.yaml#/ErrorResponse"
+            example:
+              error: "phone_taken"
+              message: "Этот номер уже используется"
+      "500":
+        $ref: "../components/responses.yaml#/InternalServerError"
+
+# ─── POST /profile/delete ──────────────────────────────────
+profileDelete:
+  post:
+    tags: [Profile]
+    operationId: deleteAccount
+    summary: Удалить аккаунт клиента
+    description: |
+      Удаляет аккаунт (FR-48, NFR-20):
+      - Активные брони аннулируются (статус → cancelled, места/прокат возвращаются)
+      - Прошедшие брони анонимизируются
+      - ПДн (name, phone) анонимизируются
+      - phone освобождается для повторной регистрации
+      - Все токены отзываются
+    security:
+      - BearerAuth: []
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            properties: {}
+            description: Подтверждение удаления. Тело пустое.
+    responses:
+      "204":
+        description: Аккаунт удалён (анонимизирован)
+      "401":
+        $ref: "../components/responses.yaml#/Unauthorized"
+      "500":
+        $ref: "../components/responses.yaml#/InternalServerError"

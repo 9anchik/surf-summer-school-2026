@@ -1,0 +1,53 @@
+# ─── PUT /notifications/push-token ──────────────────────────
+pushToken:
+  put:
+    tags: [Notifications]
+    operationId: registerPushToken
+    summary: Зарегистрировать push-токен устройства
+    description: |
+      Регистрирует/обновляет push-токен (APNs/FCM) для доставки уведомлений
+      (NFR-17, FR-33). При отзыве разрешения на push клиент отправляет
+      DELETE для удаления токена.
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [token, platform]
+            properties:
+              token:
+                type: string
+                description: Push-токен от APNs или FCM
+              platform:
+                type: string
+                enum: [ios, android]
+                description: Платформа устройства
+              app_version:
+                type: string
+                description: Версия приложения (для отладки)
+                example: "1.0.0"
+    responses:
+      "204":
+        description: Токен зарегистрирован
+      "401":
+        $ref: "../components/responses.yaml#/Unauthorized"
+      "500":
+        $ref: "../components/responses.yaml#/InternalServerError"
+
+  delete:
+    tags: [Notifications]
+    operationId: unregisterPushToken
+    summary: Удалить push-токен
+    description: |
+      Удаляет push-токен. Используется при отзыве разрешения на уведомления
+      или выходе из аккаунта.
+    security:
+      - BearerAuth: []
+    responses:
+      "204":
+        description: Токен удалён
+      "401":
+        $ref: "../components/responses.yaml#/Unauthorized"

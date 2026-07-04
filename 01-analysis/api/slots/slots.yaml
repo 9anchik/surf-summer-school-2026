@@ -1,0 +1,144 @@
+# ─── GET /slots ─────────────────────────────────────────────
+slots:
+  get:
+    tags: [Slots]
+    operationId: listSlots
+    summary: Список заездов с фильтрацией (read-only)
+    description: |
+      Возвращает список предстоящих слотов. По умолчанию — на ближайшие
+      7 дней (R-027). Поддерживает фильтрацию по дате, конфигурации трассы,
+      маршалу и наличию свободных мест (FR-38).
+
+      **Семантика фильтров:** Внутри одной группы значения объединяются
+      по ИЛИ (OR), между разными группами — по И (AND). Границы периода
+      дат — включительные. Сортировка — по start_at ASC.
+
+      Заполненные (free_seats=0) и отменённые слоты включаются в ответ
+      по умолчанию. Фильтр `only_available=true` скрывает их.
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: date_from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date
+        description: |
+          Начало периода (включительно). Дефолт: текущая дата.
+          Локальная дата клиента маппится в UTC на сервере.
+      - name: date_to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date
+        description: |
+          Конец периода (включительно). Дефолт: date_from + 7 дней.
+          Максимальный диапазон: 30 дней.
+      - name: track_config_id
+        in: query
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+            format: uuid
+        style: form
+        explode: false
+        description: Фильтр по конфигурации трассы (ИЛИ). Можно несколько.
+      - name: marshal_id
+        in: query
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+            format: uuid
+        style: form
+        explode: false
+        description: Фильтр по маршалу (ИЛИ). Можно несколько.
+      - name: only_available
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+        description: |
+          Если true — скрывает слоты с free_seats=0 и status=cancelled.
+          По умолчанию false — показываются все слоты.
+    responses:
+      "200":
+        description: Список слотов
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items:
+                    $ref: "../components/schemas.yaml#/Slot"
+      "400":
+        description: Ошибка валидации параметров (date_to < date_from, диапазон > 30 дней)
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas.yaml#/ErrorResponse"
+      "401":
+        $ref: "../components/responses.yaml#/Unauthorized"
+      "500":
+        $ref: "../components/responses.yaml#/InternalServerError"
+
+# ─── GET /slots/{slotId} ────────────────────────────────────
+slotById:
+  get:
+    tags: [Slots]
+    operationId: getSlot
+    summary: Детали слота (read-only)
+    description: |
+      Полная информация о конкретном слоте для карточки слота (SCR-003).
+      Включает meeting_point, конфигурацию трассы, маршала, доступность.
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: slotId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Идентификатор слота
+    responses:
+      "200":
+        description: Детали слота
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas.yaml#/SlotDetail"
+      "401":
+        $ref: "../components/responses.yaml#/Unauthorized"
+      "404":
+        description: Слот не найден
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas.yaml#/ErrorResponse"
+            example:
+              error: "slot_not_found"
+              message: "Заезд не найден"
+      "410":
+        description: Слот отменён центром
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas.yaml#/ErrorResponse"
+            example:
+              error: "slot_cancelled"
+              message: "Заезд отменён"
+              details:
+                slot_id: "550e8400-e29b-41d4-a716-446655440000"
+                reason: "Сильный дождь, трасса закрыта"
+      "500":
+        $ref: "../components/responses.yaml#/InternalServerError"

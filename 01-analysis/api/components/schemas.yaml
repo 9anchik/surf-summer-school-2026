@@ -1,0 +1,267 @@
+Client:
+  type: object
+  required: [id, name, phone, created_at]
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Уникальный идентификатор клиента
+      example: "550e8400-e29b-41d4-a716-446655440010"
+    name:
+      type: string
+      maxLength: 50
+      example: "Алексей"
+    phone:
+      type: string
+      pattern: '^\+7\d{10}$'
+      example: "+79161234567"
+      description: +7 *** *** ** 67
+    created_at:
+      type: string
+      format: date-time
+      description: Дата регистрации (UTC)
+
+TrackConfig:
+  type: object
+  required: [id, name, type, capacity_cap, duration_min]
+  properties:
+    id:
+      type: string
+      format: uuid
+      example: "550e8400-e29b-41d4-a716-446655440020"
+    name:
+      type: string
+      example: "Короткая трасса"
+    description:
+      type: string
+      nullable: true
+      maxLength: 300
+      description: Описательный текст для карточки слота. Может быть null.
+      example: "Идеальна для первого знакомства с картингом. Плавные повороты, широкий трек."
+    type:
+      type: string
+      enum: [short, long]
+      description: "short = новички (потолок 8), long = опытные (потолок 14)"
+    capacity_cap:
+      type: integer
+      description: Потолок мест (short ≤ 8, long ≤ 14)
+      example: 8
+    duration_min:
+      type: integer
+      description: Длительность заезда в минутах
+      example: 15
+
+Marshal:
+  type: object
+  required: [id, name]
+  properties:
+    id:
+      type: string
+      format: uuid
+      example: "550e8400-e29b-41d4-a716-446655440030"
+    name:
+      type: string
+      maxLength: 50
+      example: "Дмитрий Волков"
+    photo_url:
+      type: string
+      format: uri
+      nullable: true
+      description: URL фото маршала. Может быть null.
+
+Slot:
+  type: object
+  required:
+    - id
+    - start_at
+    - track_config
+    - marshal
+    - total_seats
+    - free_seats
+    - free_rental_equipment
+    - price
+    - rental_price
+    - meeting_point
+    - status
+  properties:
+    id:
+      type: string
+      format: uuid
+      example: "550e8400-e29b-41d4-a716-446655440040"
+    start_at:
+      type: string
+      format: date-time
+      description: "Дата и время старта (UTC). Клиент отображает в локальной зоне."
+      example: "2026-07-12T15:00:00Z"
+    track_config:
+      $ref: "#/TrackConfig"
+    marshal:
+      $ref: "#/Marshal"
+    total_seats:
+      type: integer
+      description: Общее количество мест
+      example: 8
+    free_seats:
+      type: integer
+      description: Свободные места (денормализованное, обновляется атомарно)
+      example: 5
+    free_rental_equipment:
+      type: integer
+      description: Свободные прокатные комплекты (шлем + подшлемник)
+      example: 3
+    price:
+      type: integer
+      description: Цена заезда за одно место в копейках (RUB)
+      example: 250000
+    rental_price:
+      type: integer
+      description: Цена проката одного комплекта в копейках (RUB)
+      example: 30000
+    meeting_point:
+      $ref: "#/MeetingPoint"
+    status:
+      type: string
+      enum: [active, full, cancelled, started]
+      description: |
+        active — старт в будущем, есть места;
+        full — старт в будущем, free_seats = 0;
+        cancelled — отменён центром;
+        started — время старта прошло.
+    cancel_reason:
+      type: string
+      nullable: true
+      description: Причина отмены (только при status = cancelled)
+      example: "Сильный дождь, трасса закрыта"
+
+# ─── SlotDetail (расширенный, для GET /slots/{slotId}) ───
+SlotDetail:
+  allOf:
+    - $ref: "#/Slot"
+    - type: object
+      description: Расширенная версия слота с дополнительными полями для карточки
+
+MeetingPoint:
+  type: object
+  required: [name, address, lat, lng]
+  properties:
+    name:
+      type: string
+      description: Название точки сбора
+      example: "Вход со стороны парковки"
+      maxLength: 100
+    address:
+      type: string
+      description: Текстовый адрес центра
+      example: "г. Москва, ул. Гоночная, д. 42"
+      maxLength: 200
+    lat:
+      type: number
+      format: double
+      description: Широта
+      example: 55.7558
+    lng:
+      type: number
+      format: double
+      description: Долгота
+      example: 37.6173
+
+Booking:
+  type: object
+  required:
+    - id
+    - slot_id
+    - client_id
+    - seats_count
+    - rental_count
+    - status
+    - price_total
+    - created_at
+  properties:
+    id:
+      type: string
+      format: uuid
+      example: "550e8400-e29b-41d4-a716-446655440050"
+    slot_id:
+      type: string
+      format: uuid
+    client_id:
+      type: string
+      format: uuid
+    seats_count:
+      type: integer
+      minimum: 1
+      maximum: 3
+      description: Число мест (себя + до 2 гостей, R-013)
+    rental_count:
+      type: integer
+      minimum: 0
+      description: Число прокатных комплектов (0 ≤ rental_count ≤ seats_count)
+    status:
+      type: string
+      enum: [active, cancelled, late_cancel, club_cancelled, completed]
+      description: |
+        active — подтверждена, ожидает заезда;
+        cancelled — отменена клиентом (ранняя, ≥2ч);
+        late_cancel — отменена клиентом (поздняя, <2ч);
+        club_cancelled — отменена центром (погода и т.п., R-008);
+        completed — заезд состоялся (производное от start_at).
+    price_total:
+      type: integer
+      description: |
+        Итоговая цена в копейках (RUB). Рассчитана сервером:
+        price × seats_count + rental_price × rental_count.
+        Read-only, фиксируется на момент создания (R-005, R-010).
+      example: 560000
+      readOnly: true
+    created_at:
+      type: string
+      format: date-time
+    cancelled_at:
+      type: string
+      format: date-time
+      nullable: true
+      description: Время отмены (null если не отменена)
+
+BookingWithSlot:
+  allOf:
+    - $ref: "#/Booking"
+    - type: object
+      required: [slot]
+      properties:
+        slot:
+          $ref: "#/Slot"
+          description: Вложенные данные слота для отображения без отдельного запроса
+
+ErrorResponse:
+  type: object
+  required: [error, message]
+  properties:
+    error:
+      type: string
+      description: |
+        Машиночитаемый код ошибки. Канон таксономии — коды API (R-023).
+        Источник локализованного текста — клиентское приложение.
+      enum:
+        - invalid_phone
+        - invalid_code
+        - rate_limited
+        - invalid_refresh_token
+        - validation_error
+        - slot_full
+        - double_booking
+        - idempotency_conflict
+        - slot_cancelled
+        - slot_started
+        - slot_not_found
+        - booking_not_found
+        - already_cancelled
+        - forbidden
+        - phone_taken
+        - internal_error
+    message:
+      type: string
+      description: Человеко-читаемое сообщение (локализуется на клиенте)
+    details:
+      type: object
+      description: Дополнительные данные для UX-реакции
+      additionalProperties: true

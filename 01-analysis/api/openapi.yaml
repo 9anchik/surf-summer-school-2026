@@ -1,0 +1,102 @@
+openapi: 3.0.3
+
+info:
+  title: Апекс — Клиентский API
+  description: |
+    API клиентского мобильного приложения картинг-центра «Апекс».
+
+    **Скоуп:** Только роль «Клиент» (R-028). Интерфейсы маршала и владельца
+    обеспечиваются существующей инфраструктурой и через данный API не доступны.
+
+    **Граница серверной интеграции (R-004):** Бэкенд — black-box источник истины.
+    Гарантия «0 двойных броней» обеспечивается на его стороне (атомарная проверка
+    свободных картов). Клиент полагается на ответы бэкенда.
+
+    **Данные (R-015):** Проект учебный/тестовый, легаси-данных нет. Данный контракт
+    считается канонической схемой. Бэкенд по условию отдаёт все поля контракта.
+  version: 1.0.0
+  contact:
+    name: Команда «Апекс»
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://api.apex-karting.example.com/v1
+    description: Production
+  - url: https://staging-api.apex-karting.example.com/v1
+    description: Staging
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Auth
+    description: Регистрация и вход по SMS OTP
+  - name: Slots
+    description: Просмотр заездов (read-only)
+  - name: Reference
+    description: Справочники конфигураций трасс и маршалов (read-only)
+  - name: Bookings
+    description: Создание, просмотр и отмена бронирований
+  - name: Profile
+    description: Профиль клиента
+  - name: Notifications
+    description: Регистрация push-токенов
+
+paths:
+  # ─── Auth ─────────────────────────────────────────────────
+  /auth/otp/send:
+    $ref: './paths/auth.yaml#/otpSend'
+  /auth/otp/verify:
+    $ref: './paths/auth.yaml#/otpVerify'
+  /auth/refresh:
+    $ref: './paths/auth.yaml#/refresh'
+  /auth/logout:
+    $ref: './paths/auth.yaml#/logout'
+
+  # ─── Reference ────────────────────────────────────────────
+  /track-configs:
+    $ref: './paths/reference.yaml#/trackConfigs'
+  /marshals:
+    $ref: './paths/reference.yaml#/marshals'
+
+  # ─── Slots ────────────────────────────────────────────────
+  /slots:
+    $ref: './paths/slots.yaml#/slots'
+  /slots/{slotId}:
+    $ref: './paths/slots.yaml#/slotById'
+
+  # ─── Bookings ─────────────────────────────────────────────
+  /bookings:
+    $ref: './paths/bookings.yaml#/bookings'
+  /bookings/{bookingId}:
+    $ref: './paths/bookings.yaml#/bookingById'
+  /bookings/{bookingId}/cancel:
+    $ref: './paths/bookings.yaml#/bookingCancel'
+
+  # ─── Profile ──────────────────────────────────────────────
+  /profile:
+    $ref: './paths/profile.yaml#/profile'
+  /profile/delete:
+    $ref: './paths/profile.yaml#/profileDelete'
+
+  # ─── Notifications ────────────────────────────────────────
+  /notifications/push-token:
+    $ref: './paths/notifications.yaml#/pushToken'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Короткоживущий access-токен (~15 мин). При 401 клиент пытается
+        обновить по refresh-токену (POST /auth/refresh); при неуспехе —
+        перелогин через OTP (NFR-18).
+
+  schemas:
+    $ref: './components/schemas.yaml'
+
+  responses:
+    $ref: './components/responses.yaml'

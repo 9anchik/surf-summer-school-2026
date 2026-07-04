@@ -1,0 +1,326 @@
+# ─── POST /bookings ─────────────────────────────────────────
+bookings:
+  post:
+    tags: [Bookings]
+    operationId: createBooking
+    summary: Создать бронирование
+    description: |
+      Создаёт бронь на выбранный слот. Клиент передаёт Idempotency-Key
+      для защиты от дублей (R-022). Бэкенд атомарно проверяет и уменьшает
+      free_seats и free_rental_equipment (NFR-8).
+
+      **Лимиты:**
+      - seats_count ≤ min(free_seats, track_config.capacity_cap, 3) (FR-13)
+      - rental_count ≤ free_rental_equipment (FR-14)
+      - rental_count ≤ seats_count
+
+      **Цена:** price_total рассчитывается сервером и возвращается как
+      read-only. Клиент не пересчитывает (FR-45, R-005).
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: |
+          Уникальный ключ идемпотентности. Повтор запроса с тем же ключом
+          и телом возвращает идентичный ответ без создания дубля (R-022).
+          Повтор с тем же ключом, но другим телом — ошибка 409.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [slot_id, seats_count, rental_count]
+            properties:
+              slot_id:
+                type: string
+                format: uuid
+                description: Идентификатор слота
+              seats_count:
+                type: integer
+                minimum: 1
+                maximum: 3
+                description: Число мест (себя + до 2 гостей)
+              rental_count:
+                type: integer
+                minimum: 0
+                maximum: 3
+                description: |
+                  Число прокатных комплектов экипировки (0 ≤ rental_count ≤ seats_count).
+                  Остальные места (seats_count - rental_count) — своя экипировка.
+    responses:
+      "201":
+        description: Бронь успешно создана
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas.yaml#/Booking"
+      "400":
+        description: Ошибка валидации (seats_count > 3, rental_count > seats_count и т.п.)
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas.yaml#/ErrorResponse"
+            example:
+              error: "validation_error"
+              message: "Количество прокатных комплектов не может превышать число мест"
+              details:
+                field: "rental_count"
+      "401":
+        $ref: "../components/responses.yaml#/Unauthorized"
+      "409":
+        description: |
+          Конфликт. Возможные причины:
+          - `slot_full`: недостаточно мест или прокатной экипировки
+          - `double_booking`: у клиента уже есть активная бронь на этот слот
+          - `idempotency_conflict`: тот же Idempotency-Key, но другое тело запроса
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas.yaml#/ErrorResponse"
+            examples:
+              slot_full:
+                summary: Недостаточно мест
+                value:
+                  error: "slot_full"
+                  message: "Недостаточно свободных мест или прокатной экипировки"
+                  details:
+                    available_seats: 1
+                    available_rental_equipment: 0
+              double_booking:
+                summary: Двойная бронь
+                value:
+                  error: "double_booking"
+                  message: "Вы уже записаны на этот заезд"
+                  details:
+                    booking_id: "550e8400-e29b-41d4-a716-446655440001"
+              idempotency_conflict:
+                summary: Конфликт идемпотентности
+                value:
+                  error: "idempotency_conflict"
+                  message: "Запрос с таким Idempotency-Key уже обработан с другими параметрами"
+      "410":
+        description: Слот отменён центром
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas.yaml#/ErrorResponse"
+            example:
+              error: "slot_cancelled"
+              message: "Заезд отменён"
+              details:
+                slot_id: "550e8400-e29b-41d4-a716-446655440000"
+                reason: "Сильный дождь, трасса закрыта"
+      "422":
+        description: Заезд уже начался или прошёл
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas.yaml#/ErrorResponse"
+            example:
+              error: "slot_started"
+              message: "Заезд уже начался, запись недоступна"
+              details:
+                slot_id: "550e8400-e29b-41d4-a716-446655440000"
+                start_at: "2026-07-04T18:00:00Z"
+      "500":
+        $ref: "../components/responses.yaml#/InternalServerError"
+
+  # ─── GET /bookings ──────────────────────────────────────
+  get:
+    tags: [Bookings]
+    operationId: listBookings
+    summary: Список бронирований клиента (с пагинацией)
+    description: |
+      Возвращает ВСЮ историю броней клиента (активные, отменённые, поздние,
+      отменённые центром, прошедшие) с пагинацией (FR-35a). Сортировка по
+      slot.start_at DESC. Разбиение на «предстоящие» и «прошедшие» выполняется
+      на клиенте по slot.start_at.
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+        description: Количество записей на страницу
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+        description: Смещение (для пагинации)
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+            enum: [active, cancelled, late_cancel, club_cancelled, completed]
+        style: form
+        explode: false
+        description: Фильтр по статусу (ИЛИ)
+    responses:
+      "200":
+        description: Список бронирований
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items, total, limit, offset]
+              properties:
+                items:
+                  type: array
+                  items:
+                    $ref: "../components/schemas.yaml#/BookingWithSlot"
+                total:
+                  type: integer
+                  description: Общее количество записей
+                limit:
+                  type: integer
+                offset:
+                  type: integer
+      "401":
+        $ref: "../components/responses.yaml#/Unauthorized"
+      "500":
+        $ref: "../components/responses.yaml#/InternalServerError"
+
+# ─── GET /bookings/{bookingId} ──────────────────────────────
+bookingById:
+  get:
+    tags: [Bookings]
+    operationId: getBooking
+    summary: Детали бронирования
+    description: |
+      Полная информация о конкретной брони для экрана деталей (SCR-06).
+      Включает данные связанного слота (время старта, трасса, маршал,
+      место сбора).
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: bookingId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    responses:
+      "200":
+        description: Детали бронирования
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas.yaml#/BookingWithSlot"
+      "401":
+        $ref: "../components/responses.yaml#/Unauthorized"
+      "403":
+        description: Бронь принадлежит другому клиенту
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas.yaml#/ErrorResponse"
+            example:
+              error: "forbidden"
+              message: "Нет доступа к этому бронированию"
+      "404":
+        description: Бронь не найдена
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas.yaml#/ErrorResponse"
+            example:
+              error: "booking_not_found"
+              message: "Бронирование не найдено"
+      "500":
+        $ref: "../components/responses.yaml#/InternalServerError"
+
+# ─── POST /bookings/{bookingId}/cancel ──────────────────────
+bookingCancel:
+  post:
+    tags: [Bookings]
+    operationId: cancelBooking
+    summary: Отменить бронирование
+    description: |
+      Отменяет бронь целиком (R-014). Частичная отмена не поддерживается.
+
+      **Тип отмены определяет сервер** по slot.start_at в UTC (R-021):
+      - ≥ 3 часа до старта → `cancelled` (места и прокат возвращаются в слот, FR-17)
+      - < 3 часа до старта → `late_cancel` (места НЕ возвращаются, штрафов нет, FR-18)
+      - Граница «ровно 3 часа» = ранняя отмена
+
+      Отмена терминальна: повторная отмена невозможна (UC-2 E2).
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: bookingId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Ключ идемпотентности (R-022)
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            properties: {}
+            description: Тело запроса пустое. Все данные в пути и заголовках.
+    responses:
+      "200":
+        description: Бронь успешно отменена
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas.yaml#/Booking"
+      "401":
+        $ref: "../components/responses.yaml#/Unauthorized"
+      "403":
+        description: Бронь принадлежит другому клиенту
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas.yaml#/ErrorResponse"
+      "409":
+        description: Бронь уже отменена (терминальный статус)
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas.yaml#/ErrorResponse"
+            example:
+              error: "already_cancelled"
+              message: "Бронирование уже отменено"
+              details:
+                current_status: "cancelled"
+      "422":
+        description: Заезд уже начался — отмена невозможна
+        content:
+          application/json:
+            schema:
+              $ref: "../components/schemas.yaml#/ErrorResponse"
+            example:
+              error: "slot_started"
+              message: "Заезд уже начался, отмена недоступна"
+              details:
+                slot_id: "550e8400-e29b-41d4-a716-446655440000"
+                start_at: "2026-07-04T18:00:00Z"
+      "500":
+        $ref: "../components/responses.yaml#/InternalServerError"
