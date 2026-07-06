@@ -8,11 +8,18 @@ import (
 
 var ErrMissingIdempotencyKey = errors.New("missing idempotency key")
 
-type Service struct {
-	repo *Repository
+type Repository interface {
+	Create(ctx context.Context, userID string, req CreateBookingRequest, idempotencyKey string) (*Booking, error)
+	ListByUser(ctx context.Context, userID string, limit int, offset int) ([]BookingListItem, error)
+	GetByID(ctx context.Context, userID string, bookingID string) (*BookingDetails, error)
+	Cancel(ctx context.Context, userID string, bookingID string) (*Booking, error)
 }
 
-func NewService(repo *Repository) *Service {
+type Service struct {
+	repo Repository
+}
+
+func NewService(repo Repository) *Service {
 	return &Service{repo: repo}
 }
 

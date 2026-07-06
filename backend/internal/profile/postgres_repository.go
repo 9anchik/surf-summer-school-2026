@@ -10,15 +10,15 @@ import (
 
 var ErrProfileNotFound = errors.New("profile not found")
 
-type Repository struct {
+type PostgresRepository struct {
 	db *pgxpool.Pool
 }
 
-func NewRepository(db *pgxpool.Pool) *Repository {
-	return &Repository{db: db}
+func NewRepository(db *pgxpool.Pool) *PostgresRepository {
+	return &PostgresRepository{db: db}
 }
 
-func (r *Repository) GetByID(ctx context.Context, userID string) (*UserProfile, error) {
+func (r *PostgresRepository) GetByID(ctx context.Context, userID string) (*UserProfile, error) {
 	var user UserProfile
 
 	err := r.db.QueryRow(ctx, `
@@ -44,7 +44,7 @@ func (r *Repository) GetByID(ctx context.Context, userID string) (*UserProfile, 
 	return &user, nil
 }
 
-func (r *Repository) Update(ctx context.Context, userID string, req UpdateProfileRequest) (*UserProfile, error) {
+func (r *PostgresRepository) Update(ctx context.Context, userID string, req UpdateProfileRequest) (*UserProfile, error) {
 	var user UserProfile
 
 	err := r.db.QueryRow(ctx, `
@@ -74,7 +74,7 @@ func (r *Repository) Update(ctx context.Context, userID string, req UpdateProfil
 	return &user, nil
 }
 
-func (r *Repository) Delete(ctx context.Context, userID string) error {
+func (r *PostgresRepository) Delete(ctx context.Context, userID string) error {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return err
