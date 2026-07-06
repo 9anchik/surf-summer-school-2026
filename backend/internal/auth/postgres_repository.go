@@ -2,8 +2,10 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -67,14 +69,20 @@ func (r *PostgresRepository) FindOrCreateUser(ctx context.Context, phone, name s
 
 	if err == nil {
 		if name != "" {
-			_, _ = r.db.Exec(ctx, `
+			if _, updateErr := r.db.Exec(ctx, `
 				UPDATE users
 				SET name = $1, updated_at = NOW()
 				WHERE id = $2
-			`, name, id)
+			`, name, id); updateErr != nil {
+				return "", updateErr
+			}
 		}
 
 		return id, nil
+	}
+
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return "", err
 	}
 
 	err = r.db.QueryRow(ctx, `

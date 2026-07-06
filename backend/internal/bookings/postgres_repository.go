@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -63,6 +64,10 @@ func (r *PostgresRepository) Create(
 		return &existing, nil
 	}
 
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+
 	var slot struct {
 		ID                    string
 		TotalSeats            int
@@ -95,7 +100,10 @@ func (r *PostgresRepository) Create(
 	)
 
 	if err != nil {
-		return nil, ErrSlotNotFound
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrSlotNotFound
+		}
+		return nil, err
 	}
 
 	if slot.Status != "active" {
