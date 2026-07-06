@@ -12,12 +12,18 @@ import (
 
 var ErrInvalidOTP = errors.New("invalid otp")
 
+type Repository interface {
+	SaveOTP(ctx context.Context, phone, code string, expiresAt time.Time) error
+	VerifyOTP(ctx context.Context, phone, code string) (bool, error)
+	FindOrCreateUser(ctx context.Context, phone, name string) (string, error)
+}
+
 type Service struct {
-	repo      *Repository
+	repo      Repository
 	jwtSecret string
 }
 
-func NewService(repo *Repository, jwtSecret string) *Service {
+func NewService(repo Repository, jwtSecret string) *Service {
 	return &Service{
 		repo:      repo,
 		jwtSecret: jwtSecret,

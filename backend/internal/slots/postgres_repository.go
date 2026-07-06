@@ -10,15 +10,15 @@ import (
 
 var ErrSlotNotFound = errors.New("slot not found")
 
-type Repository struct {
+type PostgresRepository struct {
 	db *pgxpool.Pool
 }
 
-func NewRepository(db *pgxpool.Pool) *Repository {
-	return &Repository{db: db}
+func NewRepository(db *pgxpool.Pool) *PostgresRepository {
+	return &PostgresRepository{db: db}
 }
 
-func (r *Repository) List(ctx context.Context, filters ListFilters) ([]Slot, error) {
+func (r *PostgresRepository) List(ctx context.Context, filters ListFilters) ([]Slot, error) {
 	query := `
 		SELECT
 			s.id::text,
@@ -86,7 +86,7 @@ func (r *Repository) List(ctx context.Context, filters ListFilters) ([]Slot, err
 	return result, nil
 }
 
-func (r *Repository) GetByID(ctx context.Context, id string) (*Slot, error) {
+func (r *PostgresRepository) GetByID(ctx context.Context, id string) (*Slot, error) {
 	query := `
 		SELECT
 			s.id::text,

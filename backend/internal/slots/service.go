@@ -2,11 +2,16 @@ package slots
 
 import "context"
 
-type Service struct {
-	repo *Repository
+type Repository interface {
+	List(ctx context.Context, filters ListFilters) ([]Slot, error)
+	GetByID(ctx context.Context, id string) (*Slot, error)
 }
 
-func NewService(repo *Repository) *Service {
+type Service struct {
+	repo Repository
+}
+
+func NewService(repo Repository) *Service {
 	return &Service{repo: repo}
 }
 

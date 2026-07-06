@@ -7,15 +7,15 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type Repository struct {
+type PostgresRepository struct {
 	db *pgxpool.Pool
 }
 
-func NewRepository(db *pgxpool.Pool) *Repository {
-	return &Repository{db: db}
+func NewRepository(db *pgxpool.Pool) *PostgresRepository {
+	return &PostgresRepository{db: db}
 }
 
-func (r *Repository) SaveOTP(ctx context.Context, phone, code string, expiresAt time.Time) error {
+func (r *PostgresRepository) SaveOTP(ctx context.Context, phone, code string, expiresAt time.Time) error {
 	_, err := r.db.Exec(ctx, `
 		INSERT INTO otp_codes (phone, code, expires_at)
 		VALUES ($1, $2, $3)
@@ -24,7 +24,7 @@ func (r *Repository) SaveOTP(ctx context.Context, phone, code string, expiresAt 
 	return err
 }
 
-func (r *Repository) VerifyOTP(ctx context.Context, phone, code string) (bool, error) {
+func (r *PostgresRepository) VerifyOTP(ctx context.Context, phone, code string) (bool, error) {
 	var id string
 
 	err := r.db.QueryRow(ctx, `
@@ -55,7 +55,7 @@ func (r *Repository) VerifyOTP(ctx context.Context, phone, code string) (bool, e
 	return true, nil
 }
 
-func (r *Repository) FindOrCreateUser(ctx context.Context, phone, name string) (string, error) {
+func (r *PostgresRepository) FindOrCreateUser(ctx context.Context, phone, name string) (string, error) {
 	var id string
 
 	err := r.db.QueryRow(ctx, `

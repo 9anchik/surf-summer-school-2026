@@ -19,15 +19,15 @@ var (
 	ErrSlotAlreadyStarted = errors.New("slot already started")
 )
 
-type Repository struct {
+type PostgresRepository struct {
 	db *pgxpool.Pool
 }
 
-func NewRepository(db *pgxpool.Pool) *Repository {
-	return &Repository{db: db}
+func NewRepository(db *pgxpool.Pool) *PostgresRepository {
+	return &PostgresRepository{db: db}
 }
 
-func (r *Repository) Create(
+func (r *PostgresRepository) Create(
 	ctx context.Context,
 	userID string,
 	req CreateBookingRequest,
@@ -186,7 +186,7 @@ func (r *Repository) Create(
 	return &booking, nil
 }
 
-func (r *Repository) ListByUser(
+func (r *PostgresRepository) ListByUser(
 	ctx context.Context,
 	userID string,
 	limit int,
@@ -269,7 +269,7 @@ func (r *Repository) ListByUser(
 	return items, nil
 }
 
-func (r *Repository) Cancel(
+func (r *PostgresRepository) Cancel(
 	ctx context.Context,
 	userID string,
 	bookingID string,
@@ -374,7 +374,7 @@ func (r *Repository) Cancel(
 	return &booking, nil
 }
 
-func (r *Repository) GetByID(
+func (r *PostgresRepository) GetByID(
 	ctx context.Context,
 	userID string,
 	bookingID string,

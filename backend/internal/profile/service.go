@@ -8,11 +8,17 @@ import (
 
 var ErrInvalidProfileData = errors.New("invalid profile data")
 
-type Service struct {
-	repo *Repository
+type Repository interface {
+	GetByID(ctx context.Context, userID string) (*UserProfile, error)
+	Update(ctx context.Context, userID string, req UpdateProfileRequest) (*UserProfile, error)
+	Delete(ctx context.Context, userID string) error
 }
 
-func NewService(repo *Repository) *Service {
+type Service struct {
+	repo Repository
+}
+
+func NewService(repo Repository) *Service {
 	return &Service{repo: repo}
 }
 
