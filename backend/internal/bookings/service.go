@@ -30,8 +30,8 @@ func (s *Service) Create(
 	idempotencyKey string,
 ) (*Booking, error) {
 	idempotencyKey = strings.TrimSpace(idempotencyKey)
-	if idempotencyKey == "" {
-		return nil, ErrMissingIdempotencyKey
+	if err := ValidateCreateBookingRequest(req, idempotencyKey); err != nil {
+		return nil, err
 	}
 
 	return s.repo.Create(ctx, userID, req, idempotencyKey)
@@ -81,4 +81,27 @@ func (s *Service) GetByID(
 	}
 
 	return s.repo.GetByID(ctx, userID, bookingID)
+}
+
+func ValidateCreateBookingRequest(req CreateBookingRequest, idempotencyKey string) error {
+	idempotencyKey = strings.TrimSpace(idempotencyKey)
+	if idempotencyKey == "" {
+		return ErrMissingIdempotencyKey
+	}
+
+	if strings.TrimSpace(req.SlotID) == "" {
+		return ErrInvalidRequest
+	}
+
+	if len(req.Equipment) < 1 || len(req.Equipment) > 3 {
+		return ErrInvalidRequest
+	}
+
+	for _, item := range req.Equipment {
+		if item != "own" && item != "rental" {
+			return ErrInvalidRequest
+		}
+	}
+
+	return nil
 }
